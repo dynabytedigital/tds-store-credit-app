@@ -22,6 +22,28 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Serve index.html with dynamic SHOPIFY_CLIENT_ID injection for App Bridge
+app.get(['/', '/index.html'], (req, res) => {
+  try {
+    const clientId = process.env.SHOPIFY_CLIENT_ID || '';
+    let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
+    if (clientId) {
+      html = html.replace('</head>', `  <meta name="shopify-api-key" content="${clientId}">\n</head>`);
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (err) {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+});
+
+// Shopify OAuth Callback route
+app.get(['/auth/callback', '/api/auth/callback'], (req, res) => {
+  const shop = req.query.shop || 'shop.thedentalshaman.com';
+  const host = req.query.host || '';
+  res.redirect(`/?shop=${shop}&host=${host}`);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Lightweight Health Check endpoint for Render and cron-job.org
