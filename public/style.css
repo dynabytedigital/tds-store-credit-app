@@ -88,7 +88,105 @@ body::before {
   z-index: 0;
 }
 
-/* App Header & Navbar */
+.Polaris-Page {
+  position: relative;
+  z-index: 1;
+  max-width: 1340px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+
+/* ========================================================
+   HEADER & NAVBAR (POLARIS EXACT MATCH)
+   ======================================================== */
+.Polaris-Page-Header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.Polaris-Header-TitleBlock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand-logo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: #ffffff;
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 6px;
+  flex-shrink: 0;
+}
+
+.brand-logo-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.brand-meta h1 {
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--color-text-title);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.brand-store-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-brand);
+  position: relative;
+  display: inline-block;
+}
+
+.pulse-dot.live {
+  background-color: #12b76a;
+  box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.2);
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+.pulse-dot.standby {
+  background-color: #f79009;
+  box-shadow: 0 0 0 3px rgba(247, 144, 9, 0.2);
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(18, 183, 106, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(18, 183, 106, 0); }
+}
+
+.Polaris-Header-Actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* App Header & Navbar (Legacy Fallback) */
 .app-header {
   position: relative;
   z-index: 2;
