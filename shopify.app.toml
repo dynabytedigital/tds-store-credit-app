@@ -1,0 +1,24 @@
+# Configuration for Store Credit EA
+name = "Store Credit EA"
+handle = "store-credit-ea"
+application_url = "https://tds-store-credit-app.onrender.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "myjrue-ku.myshopify.com"
+
+[access_scopes]
+scopes = "write_customers,read_customers,write_price_rules,read_price_rules,write_discounts,read_discounts"
+
+[auth]
+redirect_urls = [
+  "https://tds-store-credit-app.onrender.com/auth/callback",
+  "https://tds-store-credit-app.onrender.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
+
+[pos]
+embedded = false
