@@ -44,18 +44,50 @@ app.get(['/auth/callback', '/api/auth/callback'], (req, res) => {
 });
 
 // Master Security Gate & Session Management
-const MASTER_ACCESS_CODE = process.env.MASTER_ACCESS_CODE || 'SHAMAN-PRO-9842';
-const VALID_KEYS = [
-  MASTER_ACCESS_CODE,
-  'SHAMAN-PRO-9842',
-  'SHAMAN-CREDIT-9842'
-].map(k => String(k).trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
+const MASTER_ACCESS_CODE = process.env.MASTER_ACCESS_CODE || 'TDS-CRD#3D0AD04A-70970879-A829CBF5';
+
+// Brute-force protection: IP -> { attempts, lockedUntil }
+const loginAttempts = new Map();
+
+function isIpLocked(ip) {
+  const record = loginAttempts.get(ip);
+  if (!record) return false;
+  if (Date.now() < record.lockedUntil) return true;
+  if (Date.now() >= record.lockedUntil && record.lockedUntil > 0) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return false;
+}
+
+function recordFailedAttempt(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip) || { attempts: 0, lockedUntil: 0 };
+  record.attempts += 1;
+  if (record.attempts >= 5) {
+    record.lockedUntil = now + (15 * 60 * 1000);
+    console.warn(`[Security Alert] IP ${ip} temporarily locked out for 15 minutes due to 5 failed attempts.`);
+  }
+  loginAttempts.set(ip, record);
+}
+
+function clearFailedAttempts(ip) {
+  loginAttempts.delete(ip);
+}
+
+function safeCompareKeys(inputKey, targetKey) {
+  if (!inputKey || !targetKey) return false;
+  try {
+    const hashA = crypto.createHash('sha256').update(String(inputKey).trim()).digest();
+    const hashB = crypto.createHash('sha256').update(String(targetKey).trim()).digest();
+    if (crypto.timingSafeEqual(hashA, hashB)) return true;
+  } catch (e) {}
+  const cleanInput = String(inputKey).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const cleanTarget = String(targetKey).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return cleanInput === cleanTarget;
+}
 
 const sessions = new Map();
-
-function cleanKey(k) {
-  return String(k || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
 
 function validateToken(token) {
   if (!token) return false;
@@ -70,22 +102,40 @@ function validateToken(token) {
 
 // Authentication API Endpoints
 app.post('/api/auth/access', (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  if (isIpLocked(clientIp)) {
+    const record = loginAttempts.get(clientIp);
+    const remainingMins = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+    return res.status(429).json({
+      success: false,
+      error: `Security lockout: Too many failed attempts. Try again in ${remainingMins} minute(s).`
+    });
+  }
+
   const { accessKey } = req.body || {};
   if (!accessKey) {
     return res.status(401).json({ success: false, error: 'Master access key is required.' });
   }
-  const inputClean = cleanKey(accessKey);
-  if (!VALID_KEYS.includes(inputClean)) {
-    console.warn(`[Security] Unauthorized access attempt with key: ${accessKey}`);
-    return res.status(401).json({ success: false, error: 'Invalid master operator key.' });
+
+  if (!safeCompareKeys(accessKey, MASTER_ACCESS_CODE)) {
+    recordFailedAttempt(clientIp);
+    console.warn(`[Security] Unauthorized access attempt from ${clientIp}`);
+    const remaining = Math.max(0, 5 - ((loginAttempts.get(clientIp) || {}).attempts || 0));
+    return res.status(401).json({
+      success: false,
+      error: remaining > 0
+        ? `Invalid master operator key. (${remaining} attempts remaining before temporary lockout)`
+        : 'Invalid master operator key. Security lockout activated for 15 minutes.'
+    });
   }
 
+  clearFailedAttempts(clientIp);
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, {
     createdAt: Date.now(),
     expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days valid
   });
-  console.log('[Security] Master access granted successfully.');
+  console.log(`[Security] Master access granted successfully to ${clientIp}`);
   res.json({ success: true, token });
 });
 
