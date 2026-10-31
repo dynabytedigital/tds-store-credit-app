@@ -1,4 +1,5 @@
 # Configuration for Store Credit EA
+client_id = "4ae310939fe47a621519ca91b1ed3bc1"
 name = "Store Credit EA"
 handle = "store-credit-ea"
 application_url = "https://tds-store-credit-app.onrender.com"

@@ -25,11 +25,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve index.html with dynamic SHOPIFY_CLIENT_ID injection for App Bridge
 app.get(['/', '/index.html'], (req, res) => {
   try {
-    const clientId = process.env.SHOPIFY_CLIENT_ID || '';
+    const clientId = process.env.SHOPIFY_CLIENT_ID || '4ae310939fe47a621519ca91b1ed3bc1';
     let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
-    if (clientId) {
-      html = html.replace('</head>', `  <meta name="shopify-api-key" content="${clientId}">\n</head>`);
-    }
+    html = html.replace(/content="4ae310939fe47a621519ca91b1ed3bc1"/g, `content="${clientId}"`);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (err) {
