@@ -941,3 +941,33 @@ body::before {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ========================================================
+   SECURITY ACCESS SCREEN
+   ======================================================== */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, rgba(116, 75, 111, 0.08) 0%, rgba(248, 249, 250, 0.98) 100%), #f8f9fa;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.auth-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-top: 4px solid #744B6F;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 8px 12px -4px rgba(0, 0, 0, 0.03);
+  padding: 34px 28px;
+  text-align: center;
+}
+.auth-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}

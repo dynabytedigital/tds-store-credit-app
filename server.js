@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3050;
@@ -40,6 +41,96 @@ app.get(['/auth/callback', '/api/auth/callback'], (req, res) => {
   const shop = req.query.shop || 'shop.thedentalshaman.com';
   const host = req.query.host || '';
   res.redirect(`/?shop=${shop}&host=${host}`);
+});
+
+// Master Security Gate & Session Management
+const MASTER_ACCESS_CODE = process.env.MASTER_ACCESS_CODE || 'SHAMAN-PRO-9842';
+const VALID_KEYS = [
+  MASTER_ACCESS_CODE,
+  'SHAMAN-PRO-9842',
+  'SHAMAN-CREDIT-9842'
+].map(k => String(k).trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
+
+const sessions = new Map();
+
+function cleanKey(k) {
+  return String(k || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function validateToken(token) {
+  if (!token) return false;
+  const sess = sessions.get(token);
+  if (!sess) return false;
+  if (Date.now() > sess.expiresAt) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+// Authentication API Endpoints
+app.post('/api/auth/access', (req, res) => {
+  const { accessKey } = req.body || {};
+  if (!accessKey) {
+    return res.status(401).json({ success: false, error: 'Master access key is required.' });
+  }
+  const inputClean = cleanKey(accessKey);
+  if (!VALID_KEYS.includes(inputClean)) {
+    console.warn(`[Security] Unauthorized access attempt with key: ${accessKey}`);
+    return res.status(401).json({ success: false, error: 'Invalid master operator key.' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, {
+    createdAt: Date.now(),
+    expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days valid
+  });
+  console.log('[Security] Master access granted successfully.');
+  res.json({ success: true, token });
+});
+
+app.get('/api/auth/verify', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  }
+  if (validateToken(token)) {
+    return res.json({ success: true });
+  }
+  return res.status(401).json({ success: false, error: 'Invalid or expired session.' });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  }
+  if (token) sessions.delete(token);
+  res.json({ success: true });
+});
+
+// Protect all /api endpoints except /api/auth and public health checks
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/')) {
+    return next();
+  }
+  const authHeader = req.headers['authorization'];
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  }
+  if (!validateToken(token)) {
+    return res.status(401).json({ error: 'Unauthorized: Master Access Key required.' });
+  }
+  next();
 });
 
 app.use(express.static(path.join(__dirname, 'public')));

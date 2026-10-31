@@ -1,3 +1,128 @@
+// ========================================================
+// SECURITY ACCESS & AUTHENTICATION
+// ========================================================
+function getAuthToken() {
+  return localStorage.getItem('tds_credit_token') || '';
+}
+
+async function authFetch(url, options = {}) {
+  const token = getAuthToken();
+  const headers = Object.assign({}, options.headers || {});
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    showAuthScreen();
+  }
+  return res;
+}
+
+function showAuthScreen() {
+  const authScreen = document.getElementById('authScreen');
+  const mainApp = document.getElementById('mainApp');
+  if (authScreen) authScreen.style.display = 'flex';
+  if (mainApp) mainApp.style.display = 'none';
+}
+
+function showMainApp() {
+  const authScreen = document.getElementById('authScreen');
+  const mainApp = document.getElementById('mainApp');
+  if (authScreen) authScreen.style.display = 'none';
+  if (mainApp) mainApp.style.display = 'block';
+}
+
+async function handleGetIn(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const input = document.getElementById('accessKeyInput');
+  const btn = document.getElementById('btnGetInSubmit');
+  const errDiv = document.getElementById('authErrorMsg');
+  if (errDiv) errDiv.style.display = 'none';
+
+  const accessKey = input ? input.value.trim() : '';
+  if (!accessKey) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Verifying Key...';
+  }
+
+  try {
+    const res = await fetch('/api/auth/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessKey })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      localStorage.setItem('tds_credit_token', data.token);
+      showMainApp();
+      initApp();
+    } else {
+      if (errDiv) {
+        errDiv.textContent = data.error || 'Invalid master operator key.';
+        errDiv.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    if (errDiv) {
+      errDiv.textContent = 'Verification error: ' + err.message;
+      errDiv.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Get In';
+    }
+  }
+}
+window.handleGetIn = handleGetIn;
+
+function handleLogout() {
+  const token = getAuthToken();
+  if (token) {
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).catch(() => {});
+  }
+  localStorage.removeItem('tds_credit_token');
+  showAuthScreen();
+}
+window.handleLogout = handleLogout;
+
+let appInitialized = false;
+function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
+  loadCustomers();
+  loadTemplate();
+  initSSE();
+}
+
+async function checkAuth() {
+  const token = getAuthToken();
+  if (!token) {
+    showAuthScreen();
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/verify', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.success) {
+      showMainApp();
+      initApp();
+    } else {
+      localStorage.removeItem('tds_credit_token');
+      showAuthScreen();
+    }
+  } catch (e) {
+    showAuthScreen();
+  }
+}
+
 // Frontend State
 let customers = [];
 let activeFilter = 'all';
@@ -180,7 +305,7 @@ function renderTable() {
 // Fetch Full Customer List
 async function loadCustomers() {
   try {
-    const res = await fetch('/api/customers');
+    const res = await authFetch('/api/customers');
     const data = await res.json();
     customers = data.customers || [];
     updateStats(data.stats);
@@ -192,7 +317,8 @@ async function loadCustomers() {
 
 // SSE Connection
 function initSSE() {
-  const evtSource = new EventSource('/api/stream-logs');
+  const token = getAuthToken();
+  const evtSource = new EventSource('/api/stream-logs?token=' + encodeURIComponent(token));
 
   evtSource.addEventListener('initial_logs', e => {
     const logs = JSON.parse(e.data);
@@ -238,7 +364,7 @@ function initSSE() {
 btnStart.addEventListener('click', async () => {
   if (!confirm('Are you sure you want to send £10 store credit to all customers now?')) return;
   try {
-    const res = await fetch('/api/start', { method: 'POST' });
+    const res = await authFetch('/api/start', { method: 'POST' });
     const data = await res.json();
     if (data.error) alert(data.error);
   } catch (err) {
@@ -248,12 +374,12 @@ btnStart.addEventListener('click', async () => {
 
 // Pause
 btnPause.addEventListener('click', async () => {
-  await fetch('/api/pause', { method: 'POST' });
+  await authFetch('/api/pause', { method: 'POST' });
 });
 
 // Resume
 btnResume.addEventListener('click', async () => {
-  await fetch('/api/resume', { method: 'POST' });
+  await authFetch('/api/resume', { method: 'POST' });
 });
 
 // Refresh / Sync Customers
@@ -261,7 +387,7 @@ btnRefresh.addEventListener('click', async () => {
   btnRefresh.disabled = true;
   btnRefresh.textContent = 'Syncing...';
   try {
-    const res = await fetch('/api/refresh-customers', { method: 'POST' });
+    const res = await authFetch('/api/refresh-customers', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       await loadCustomers();
@@ -277,7 +403,7 @@ btnRefresh.addEventListener('click', async () => {
 // Retry Failed
 btnRetryFailed.addEventListener('click', async () => {
   try {
-    const res = await fetch('/api/retry-failed', { method: 'POST' });
+    const res = await authFetch('/api/retry-failed', { method: 'POST' });
     const data = await res.json();
     alert(`Retrying ${data.count} failed deliveries.`);
     await loadCustomers();
@@ -313,7 +439,7 @@ btnSendTest.addEventListener('click', async () => {
   testFeedback.style.display = 'none';
 
   try {
-    const res = await fetch('/api/test-email', {
+    const res = await authFetch('/api/test-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, firstName })
@@ -423,7 +549,7 @@ function showTemplateAlert(msg, type = 'success') {
 async function loadTemplate() {
   if (!templateCode) return;
   try {
-    const res = await fetch('/api/template');
+    const res = await authFetch('/api/template');
     const data = await res.json();
     if (data.success) {
       if (data.html) templateCode.value = data.html;
@@ -480,7 +606,7 @@ if (btnSaveTemplate) {
     btnSaveTemplate.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><circle cx="12" cy="12" r="10"/></svg> Saving...`;
 
     try {
-      const res = await fetch('/api/template', {
+      const res = await authFetch('/api/template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html, subject })
@@ -511,7 +637,7 @@ if (btnResetTemplate) {
     }
 
     try {
-      const res = await fetch('/api/template/reset', { method: 'POST' });
+      const res = await authFetch('/api/template/reset', { method: 'POST' });
       const data = await res.json();
       if (data.success && data.html) {
         templateCode.value = data.html;
@@ -527,7 +653,5 @@ if (btnResetTemplate) {
   });
 }
 
-// Initial boot
-loadCustomers();
-loadTemplate();
-initSSE();
+// Initial boot with master security check
+document.addEventListener('DOMContentLoaded', checkAuth);
