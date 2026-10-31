@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: tds-store-credit-app
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: SHOPIFY_SHOP
+        value: shop.thedentalshaman.com
+      - key: SHOPIFY_MYSHOPIFY_DOMAIN
+        value: myjrue-ku.myshopify.com
+      - key: SHOPIFY_ADMIN_ACCESS_TOKEN
+        sync: false
+      - key: API_VERSION
+        value: 2024-01
+      - key: DEFAULT_FROM_NAME
+        value: Dr. Marc Mortiboys | The Dental Shaman
+      - key: DEFAULT_FROM_EMAIL
+        value: shop@thedentalshaman.com
+      - key: DEFAULT_REPLY_TO
+        value: shop@thedentalshaman.com
+      - key: SMTP_HOST
+        value: smtp.hostinger.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        value: shop@thedentalshaman.com
+      - key: SMTP_PASS
+        sync: false
+      - key: STORE_CREDIT_AMOUNT
+        value: "10.00"
+      - key: STORE_CREDIT_CURRENCY
+        value: GBP
+      - key: PRICE_RULE_TITLE
+        value: TDS-STORE-CREDIT-10GBP
+      - key: PRICE_RULE_ID
+        value: "1878761963849"

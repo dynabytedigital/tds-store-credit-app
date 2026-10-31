@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Dental Shaman · £10 Store Credit Distribution System</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top App Bar -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-logo-frame">
+        <img src="/logo.png" alt="The Dental Shaman" onerror="this.src='https://thedentalshaman.com/assets/tds_logo_header.png'">
+      </div>
+      <div class="brand-meta">
+        <h1>The Dental Shaman</h1>
+        <p>&pound;10 Native Store Credit Distribution Console</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-badge status-online">
+        <span class="dot"></span> Shopify: shop.thedentalshaman.com
+      </div>
+      <div class="status-badge status-online">
+        <span class="dot"></span> SMTP: shop@thedentalshaman.com
+      </div>
+      <span class="operator-pill">Store Credit API: Active</span>
+    </div>
+  </header>
+
+  <div class="app-container">
+
+    <!-- KPI Metric Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Store Customers</div>
+        <div class="kpi-value" id="kpi-total">0</div>
+        <div class="kpi-hint">Synchronized from Shopify</div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Credit Sent (&pound;10)</div>
+        <div class="kpi-value" id="kpi-sent">0</div>
+        <div class="kpi-hint" id="kpi-value-delivered">&pound;0.00 value distributed</div>
+      </div>
+      <div class="kpi-card kpi-pending">
+        <div class="kpi-label">Pending In Queue</div>
+        <div class="kpi-value" id="kpi-pending">0</div>
+        <div class="kpi-hint">Awaiting 1-click dispatch</div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-label">Failed / Errored</div>
+        <div class="kpi-value" id="kpi-failed">0</div>
+        <div class="kpi-hint">
+          <button id="btn-retry-failed" class="btn-micro" style="display:none;">Retry All Failed</button>
+          <span id="kpi-failed-text">No delivery issues</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Master Control & Progress Banner -->
+    <section class="control-panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Batch Distribution Controls</h2>
+          <p class="panel-desc">Generate single-use &pound;10 discount codes in Shopify and send the default notification email to all customers.</p>
+        </div>
+        <div class="action-buttons">
+          <button id="btn-refresh" class="btn btn-secondary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Sync Customers
+          </button>
+          <button id="btn-pause" class="btn btn-warning" style="display: none;">Pause</button>
+          <button id="btn-resume" class="btn btn-primary" style="display: none;">Resume</button>
+          <button id="btn-start" class="btn btn-emerald">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Send &pound;10 Store Credit to All Customers
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Progress Bar -->
+      <div class="progress-wrap">
+        <div class="progress-info">
+          <span class="progress-label" id="progress-status-text">Status: Ready to send</span>
+          <span class="progress-numbers" id="progress-counts">0 / 0 sent (0%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Two-Column Layout: Test Panel & Live Log Stream -->
+    <div class="split-grid">
+      
+      <!-- Test & Preview Card -->
+      <section class="card test-card">
+        <div class="card-header">
+          <h3 class="card-title">🧪 Send a Live Test Email</h3>
+          <span class="badge-tag">Pre-Flight Check</span>
+        </div>
+        <p class="card-desc">Verify your Hostinger SMTP and preview the exact Shopify-style email template in your own inbox before dispatching to everyone.</p>
+        
+        <div class="form-group">
+          <label for="test-email">Recipient Email Address</label>
+          <input type="email" id="test-email" placeholder="e.g. your-email@gmail.com" class="input-field">
+        </div>
+        <div class="form-group">
+          <label for="test-name">Recipient Name (Optional)</label>
+          <input type="text" id="test-name" placeholder="Leave blank to use actual Shopify name" class="input-field">
+        </div>
+        
+        <button id="btn-send-test" class="btn btn-primary btn-full">
+          Send Test &pound;10 Credit Email
+        </button>
+        <div id="test-feedback" class="feedback-msg" style="display: none;"></div>
+      </section>
+
+      <!-- Live Log Terminal Stream -->
+      <section class="card terminal-card">
+        <div class="card-header">
+          <div class="terminal-title-row">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <h3 class="card-title" style="margin-left: 8px;">Live Progress &amp; Error Log</h3>
+          </div>
+          <button id="btn-clear-logs" class="btn-micro">Clear</button>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+          <div class="log-entry log-info"><span class="log-time">[Init]</span> System loaded. Connected to Hostinger SMTP and Shopify Admin API.</div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Email Template Live Editor (Side-by-Side with Interactive Preview) -->
+    <section class="card template-editor-card">
+      <div class="card-header table-header-flex">
+        <div>
+          <h3 class="card-title" style="margin: 0; font-size: 16px;">Email Template Live Editor</h3>
+          <p class="card-desc">Customize HTML and preview rendering on Desktop &amp; Mobile viewports in real time.</p>
+        </div>
+        <div class="template-header-actions">
+          <div class="badge-tag" style="background:var(--color-brand-light); color:var(--color-brand); border-color:var(--color-brand-border); font-weight:600; padding:6px 14px;">
+            Active &pound;10 Store Credit Template
+          </div>
+          <button id="btn-reset-template" class="btn btn-secondary" title="Revert to default layout">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset Default
+          </button>
+          <button id="btn-save-template" class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Template
+          </button>
+        </div>
+      </div>
+
+      <div class="template-editor-grid">
+        <!-- Left Column: Subject Line & HTML Source Code Editor -->
+        <div class="editor-col-left">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" for="tplSubjectInput" style="font-weight: 600; font-size: 13px; color: var(--color-text-title); margin-bottom: 6px; display: block;">Subject Line</label>
+            <input type="text" id="tplSubjectInput" class="input-field" value="You've received £10 store credit from The Dental Shaman" style="width: 100%; font-size: 13.5px; padding: 10px 14px; background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+            <div style="font-size: 11.5px; color: var(--color-text-muted); margin-top: 5px;">
+              Variables: <code>{{first_name}}</code>, <code>{{store_credit}}</code>, <code>{{shop_name}}</code>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label class="form-label" for="template-code" style="font-weight: 600; font-size: 13px; color: var(--color-text-title); margin: 0;">HTML Source Code</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="editor-char-count" style="font-size: 11.5px; color: var(--color-text-muted);">0 chars</span>
+                <span style="color: var(--color-border);">&bull;</span>
+                <span id="editor-line-count" style="font-size: 11.5px; color: var(--color-text-muted);">0 lines</span>
+              </div>
+            </div>
+            <textarea id="template-code" class="code-editor-sidebyside" spellcheck="false" placeholder="Loading email template HTML..."></textarea>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Device Viewport Preview -->
+        <div class="editor-col-right">
+          <div class="device-preview-bar">
+            <span style="font-weight: 600; color: var(--color-text-title);">Interactive Live Preview</span>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" id="btnPreviewDesktop" class="device-switcher-btn active" onclick="switchPreviewDevice('desktop')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                Desktop
+              </button>
+              <button type="button" id="btnPreviewMobile" class="device-switcher-btn" onclick="switchPreviewDevice('mobile')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                Mobile
+              </button>
+            </div>
+          </div>
+          <div class="preview-viewport-wrapper">
+            <div id="previewViewportFrame" class="preview-viewport-frame desktop">
+              <iframe id="templateLivePreviewIframe" title="Email Live Preview" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="editor-footer">
+        <div class="editor-meta">
+          <span>Target File: <code>templates/shopify-credit-template.html</code></span>
+          <span>&bull;</span>
+          <span id="template-last-saved">Last saved: Ready</span>
+        </div>
+        <div id="template-save-alert" class="template-save-alert" style="display:none;"></div>
+      </div>
+    </section>
+
+    <!-- Customer Database Table -->
+    <section class="card table-card">
+      <div class="card-header table-header-flex">
+        <div>
+          <h3 class="card-title">Customer Distribution Registry</h3>
+          <p class="card-desc">Visual registry of all customer records, generated &pound;10 discount codes, and live dispatch statuses.</p>
+        </div>
+        <div class="table-controls">
+          <div class="tabs">
+            <button class="tab active" data-filter="all">All Shopify (<span id="tab-count-all">0</span>)</button>
+            <button class="tab" data-filter="ready">With Email (<span id="tab-count-ready">0</span>)</button>
+            <button class="tab" data-filter="sent">Sent (<span id="tab-count-sent">0</span>)</button>
+            <button class="tab" data-filter="pending">Pending (<span id="tab-count-pending">0</span>)</button>
+            <button class="tab" data-filter="failed">Failed (<span id="tab-count-failed">0</span>)</button>
+            <button class="tab" data-filter="no_email">Phone Only (<span id="tab-count-no-email">0</span>)</button>
+          </div>
+          <input type="text" id="search-input" placeholder="Search name, email, or phone..." class="search-input">
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Email / Phone</th>
+              <th>Shopify Store Credit</th>
+              <th>Status</th>
+              <th>Dispatched At</th>
+              <th>Details / Errors</th>
+            </tr>
+          </thead>
+          <tbody id="customer-table-body">
+            <tr>
+              <td colspan="6" class="table-empty">Loading customers from Shopify...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "dental-shaman-store-credit-app",
+  "version": "1.0.0",
+  "description": "1-Click £10 Store Credit Distribution & Live Progress Tracking for The Dental Shaman",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "nodemailer": "^6.9.16"
+  }
+}
