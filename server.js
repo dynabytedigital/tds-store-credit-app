@@ -246,6 +246,46 @@ function renderSubject(firstName, customSubject, email) {
     .replace(/\{\{shop_name\}\}/gi, 'The Dental Shaman');
 }
 
+// Universal Email Dispatcher: Resend REST API (HTTPS Port 443 - Sub-second speed) with SMTP Fallback
+async function sendEmailUniversal(mailOptions) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey && resendApiKey.trim()) {
+    try {
+      const fromName = process.env.DEFAULT_FROM_NAME || 'Dr. Marc Mortiboys | The Dental Shaman';
+      const fromEmail = process.env.DEFAULT_FROM_EMAIL || 'shop@thedentalshaman.com';
+      const replyTo = mailOptions.replyTo || process.env.DEFAULT_REPLY_TO || fromEmail;
+
+      const payload = {
+        from: `${fromName} <${fromEmail}>`,
+        to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+        reply_to: replyTo,
+        subject: mailOptions.subject,
+        html: mailOptions.html
+      };
+
+      const res = await axios.post('https://api.resend.com/emails', payload, {
+        headers: {
+          'Authorization': `Bearer ${resendApiKey.trim()}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      return {
+        info: { messageId: res.data?.id || `resend_${Date.now()}` },
+        usedPort: 443,
+        usedConfig: 'Resend REST API (HTTPS Port 443)'
+      };
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message;
+      console.warn(`[Universal Dispatcher] Resend API dispatch error: ${errMsg}. Attempting SMTP fallback...`);
+    }
+  }
+
+  // Fallback to SMTP
+  return await sendEmailWithFallback(mailOptions);
+}
+
 // Hostinger SMTP Transporter with Resilient Multi-Port Fallback (Port 587 TLS / Port 465 SSL)
 async function sendEmailWithFallback(mailOptions) {
   const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
@@ -259,7 +299,7 @@ async function sendEmailWithFallback(mailOptions) {
   ];
 
   // If explicitly configured to 465, try 465 first
-  const configuredPort = parseInt(process.env.SMTP_PORT || '587', 10);
+  const configuredPort = parseInt(process.env.SMTP_PORT || '465', 10);
   if (configuredPort === 465) {
     attempts.reverse();
   }
@@ -275,9 +315,9 @@ async function sendEmailWithFallback(mailOptions) {
         tls: {
           rejectUnauthorized: false
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000
+        connectionTimeout: 6000,
+        greetingTimeout: 6000,
+        socketTimeout: 8000
       });
 
       const info = await transport.sendMail(mailOptions);
@@ -286,6 +326,11 @@ async function sendEmailWithFallback(mailOptions) {
       lastError = err;
       console.warn(`[SMTP] Attempt via ${config.name} failed: ${err.message}. Trying next fallback...`);
     }
+  }
+
+  const isTimeout = lastError && (lastError.code === 'ETIMEDOUT' || lastError.message.includes('timeout') || lastError.message.includes('Connection timeout'));
+  if (isTimeout) {
+    throw new Error('Render Free Tier blocks raw SMTP ports 465 & 587. Please add RESEND_API_KEY in Render environment variables for instant sub-second delivery, or upgrade Render service to Starter ($7/mo) to unblock raw SMTP ports.');
   }
 
   throw lastError || new Error('All SMTP connection attempts failed.');
@@ -571,17 +616,19 @@ async function runBatch() {
     if (c.status === 'sent' || c.status === 'no_email') continue; // Skip sent and phone-only
 
     try {
-      // 1. Issue Official Shopify Native Store Credit (£10.00 GBP)
-      const account = await creditCustomerAccount(c.id, 10.0);
-      c.creditAccountId = account?.id || null;
-      c.creditBalance = '£10.00 GBP';
+      // 1. Issue Official Shopify Native Store Credit (£10.00 GBP) if not already credited
+      if (!c.creditAccountId) {
+        const account = await creditCustomerAccount(c.id, 10.0);
+        c.creditAccountId = account?.id || null;
+        c.creditBalance = '£10.00 GBP';
+      }
 
-      // 2. Send Official Notification Email via Hostinger SMTP (with resilient fallback)
+      // 2. Send Official Notification Email via Universal Dispatcher (Resend REST API or Hostinger SMTP)
       const html = renderEmail(c.first_name, c.email);
       const subject = renderSubject(c.first_name, null, c.email);
-      await sendEmailWithFallback({
-        from: `"${process.env.DEFAULT_FROM_NAME}" <${process.env.DEFAULT_FROM_EMAIL}>`,
-        replyTo: process.env.DEFAULT_REPLY_TO,
+      const { info, usedConfig } = await sendEmailUniversal({
+        from: `"${process.env.DEFAULT_FROM_NAME || 'The Dental Shaman'}" <${process.env.DEFAULT_FROM_EMAIL || 'shop@thedentalshaman.com'}>`,
+        replyTo: process.env.DEFAULT_REPLY_TO || 'shop@thedentalshaman.com',
         to: c.email,
         subject: subject,
         html: html
@@ -590,7 +637,7 @@ async function runBatch() {
       c.status = 'sent';
       c.sentAt = new Date().toISOString();
       c.error = null;
-      addLog(`[CREDITED & SENT] ${c.email} | Shopify Store Credit: £10.00 GBP`, 'success');
+      addLog(`[CREDITED & SENT] ${c.email} | Shopify Store Credit: £10.00 GBP via ${usedConfig}`, 'success');
     } catch (err) {
       c.status = 'failed';
       c.error = err.message;
@@ -602,8 +649,8 @@ async function runBatch() {
     broadcast('customer_update', c);
     broadcast('progress', getStats());
 
-    // Gentle delay to avoid SMTP/API rate throttling (800ms)
-    await new Promise(r => setTimeout(r, 800));
+    // Polite delay for high-throughput distribution (300ms)
+    await new Promise(r => setTimeout(r, 300));
   }
 
   state.isSending = false;
@@ -771,15 +818,15 @@ app.post('/api/test-email', async (req, res) => {
       broadcast('progress', getStats());
     }
 
-    // 3. Send the Test Email via Resilient Fallback
+    // 3. Send the Test Email via Universal Dispatcher (Resend REST API or Hostinger SMTP)
     const resolvedName = (firstName && firstName.trim() && firstName.trim().toLowerCase() !== 'valued customer')
       ? firstName.trim()
       : (local ? local.first_name : null);
     const html = renderEmail(resolvedName, cleanEmail);
     const subject = renderSubject(resolvedName, customSubject, cleanEmail);
-    const { info, usedConfig } = await sendEmailWithFallback({
-      from: `"${process.env.DEFAULT_FROM_NAME}" <${process.env.DEFAULT_FROM_EMAIL}>`,
-      replyTo: process.env.DEFAULT_REPLY_TO,
+    const { info, usedConfig } = await sendEmailUniversal({
+      from: `"${process.env.DEFAULT_FROM_NAME || 'The Dental Shaman'}" <${process.env.DEFAULT_FROM_EMAIL || 'shop@thedentalshaman.com'}>`,
+      replyTo: process.env.DEFAULT_REPLY_TO || 'shop@thedentalshaman.com',
       to: cleanEmail,
       subject: `[TEST PREVIEW] ${subject}`,
       html: html
@@ -798,13 +845,29 @@ app.post('/api/test-email', async (req, res) => {
   }
 });
 
-// Diagnostic SMTP verification endpoint
+// Diagnostic SMTP & API verification endpoint
 app.get('/api/verify-smtp', async (req, res) => {
   const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
   const user = process.env.SMTP_USER || 'shop@thedentalshaman.com';
   const pass = process.env.SMTP_PASS;
+  const resendApiKey = process.env.RESEND_API_KEY;
 
   const results = {};
+
+  if (resendApiKey) {
+    try {
+      const apiCheck = await axios.get('https://api.resend.com/api-keys', {
+        headers: { Authorization: `Bearer ${resendApiKey.trim()}` },
+        timeout: 5000
+      });
+      results['resend_https_api'] = { status: 'SUCCESS', message: 'Resend HTTPS API authenticated and ready.' };
+    } catch (e) {
+      results['resend_https_api'] = { status: 'FAILED', error: e.response?.data?.message || e.message };
+    }
+  } else {
+    results['resend_https_api'] = { status: 'NOT_CONFIGURED', note: 'RESEND_API_KEY env var not set. Using SMTP fallback.' };
+  }
+
   for (const config of [{ port: 587, secure: false }, { port: 465, secure: true }]) {
     try {
       const t = nodemailer.createTransport({
