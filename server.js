@@ -856,13 +856,17 @@ app.get('/api/verify-smtp', async (req, res) => {
 
   if (resendApiKey) {
     try {
-      const apiCheck = await axios.get('https://api.resend.com/api-keys', {
+      await axios.get('https://api.resend.com/api-keys', {
         headers: { Authorization: `Bearer ${resendApiKey.trim()}` },
         timeout: 5000
       });
       results['resend_https_api'] = { status: 'SUCCESS', message: 'Resend HTTPS API authenticated and ready.' };
     } catch (e) {
-      results['resend_https_api'] = { status: 'FAILED', error: e.response?.data?.message || e.message };
+      if (e.response?.data?.message?.includes('only send emails')) {
+        results['resend_https_api'] = { status: 'SUCCESS', message: 'Resend Sending API key authenticated and ready for email dispatch.' };
+      } else {
+        results['resend_https_api'] = { status: 'FAILED', error: e.response?.data?.message || e.message };
+      }
     }
   } else {
     results['resend_https_api'] = { status: 'NOT_CONFIGURED', note: 'RESEND_API_KEY env var not set. Using SMTP fallback.' };
