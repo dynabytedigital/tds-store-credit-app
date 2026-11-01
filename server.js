@@ -277,7 +277,11 @@ async function sendEmailUniversal(mailOptions) {
         usedConfig: 'Resend REST API (HTTPS Port 443)'
       };
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message;
+      let errMsg = err.response?.data?.message || err.message;
+      if (errMsg.includes('not verified') || errMsg.includes('resend.com/domains')) {
+        errMsg = 'The domain thedentalshaman.com is not verified yet in your Resend account. Please go to resend.com/domains, click "Add Domain" (thedentalshaman.com), and verify your DNS records.';
+        throw new Error(errMsg);
+      }
       console.warn(`[Universal Dispatcher] Resend API dispatch error: ${errMsg}. Attempting SMTP fallback...`);
     }
   }
