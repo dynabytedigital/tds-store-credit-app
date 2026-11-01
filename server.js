@@ -246,21 +246,50 @@ function renderSubject(firstName, customSubject, email) {
     .replace(/\{\{shop_name\}\}/gi, 'The Dental Shaman');
 }
 
-// Hostinger SMTP Transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.hostinger.com',
-  port: parseInt(process.env.SMTP_PORT || '465'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER || 'shop@thedentalshaman.com',
-    pass: process.env.SMTP_PASS
-  },
-  pool: true,
-  maxConnections: 3,
-  maxMessages: 100,
-  rateDelta: 1000,
-  rateLimit: 5 // max 5 emails per second for safety
-});
+// Hostinger SMTP Transporter with Resilient Multi-Port Fallback (Port 587 TLS / Port 465 SSL)
+async function sendEmailWithFallback(mailOptions) {
+  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
+  const user = process.env.SMTP_USER || 'shop@thedentalshaman.com';
+  const pass = process.env.SMTP_PASS;
+
+  // Cloud containers on Render connect reliably via Port 587 (TLS/STARTTLS) or Port 465 (SSL)
+  const attempts = [
+    { port: 587, secure: false, name: 'Port 587 (TLS)' },
+    { port: 465, secure: true, name: 'Port 465 (SSL)' }
+  ];
+
+  // If explicitly configured to 465, try 465 first
+  const configuredPort = parseInt(process.env.SMTP_PORT || '587', 10);
+  if (configuredPort === 465) {
+    attempts.reverse();
+  }
+
+  let lastError = null;
+  for (const config of attempts) {
+    try {
+      const transport = nodemailer.createTransport({
+        host,
+        port: config.port,
+        secure: config.secure,
+        auth: { user, pass },
+        tls: {
+          rejectUnauthorized: false
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000
+      });
+
+      const info = await transport.sendMail(mailOptions);
+      return { info, usedPort: config.port, usedConfig: config.name };
+    } catch (err) {
+      lastError = err;
+      console.warn(`[SMTP] Attempt via ${config.name} failed: ${err.message}. Trying next fallback...`);
+    }
+  }
+
+  throw lastError || new Error('All SMTP connection attempts failed.');
+}
 
 // App State
 let state = {
@@ -547,10 +576,10 @@ async function runBatch() {
       c.creditAccountId = account?.id || null;
       c.creditBalance = '£10.00 GBP';
 
-      // 2. Send Official Notification Email via Hostinger SMTP
+      // 2. Send Official Notification Email via Hostinger SMTP (with resilient fallback)
       const html = renderEmail(c.first_name, c.email);
       const subject = renderSubject(c.first_name, null, c.email);
-      await transporter.sendMail({
+      await sendEmailWithFallback({
         from: `"${process.env.DEFAULT_FROM_NAME}" <${process.env.DEFAULT_FROM_EMAIL}>`,
         replyTo: process.env.DEFAULT_REPLY_TO,
         to: c.email,
@@ -742,13 +771,13 @@ app.post('/api/test-email', async (req, res) => {
       broadcast('progress', getStats());
     }
 
-    // 3. Send the Test Email
+    // 3. Send the Test Email via Resilient Fallback
     const resolvedName = (firstName && firstName.trim() && firstName.trim().toLowerCase() !== 'valued customer')
       ? firstName.trim()
       : (local ? local.first_name : null);
     const html = renderEmail(resolvedName, cleanEmail);
     const subject = renderSubject(resolvedName, customSubject, cleanEmail);
-    const info = await transporter.sendMail({
+    const { info, usedConfig } = await sendEmailWithFallback({
       from: `"${process.env.DEFAULT_FROM_NAME}" <${process.env.DEFAULT_FROM_EMAIL}>`,
       replyTo: process.env.DEFAULT_REPLY_TO,
       to: cleanEmail,
@@ -756,7 +785,7 @@ app.post('/api/test-email', async (req, res) => {
       html: html
     });
 
-    addLog(`Test email dispatched successfully to ${cleanEmail} (MessageID: ${info.messageId})`, 'success');
+    addLog(`Test email dispatched successfully to ${cleanEmail} via ${usedConfig} (MessageID: ${info.messageId})`, 'success');
     res.json({
       success: true,
       messageId: info.messageId,
@@ -767,6 +796,34 @@ app.post('/api/test-email', async (req, res) => {
     addLog(`Test email / credit failed: ${err.message}`, 'error');
     res.status(500).json({ error: err.message });
   }
+});
+
+// Diagnostic SMTP verification endpoint
+app.get('/api/verify-smtp', async (req, res) => {
+  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
+  const user = process.env.SMTP_USER || 'shop@thedentalshaman.com';
+  const pass = process.env.SMTP_PASS;
+
+  const results = {};
+  for (const config of [{ port: 587, secure: false }, { port: 465, secure: true }]) {
+    try {
+      const t = nodemailer.createTransport({
+        host,
+        port: config.port,
+        secure: config.secure,
+        auth: { user, pass },
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 6000,
+        greetingTimeout: 6000,
+        socketTimeout: 6000
+      });
+      await t.verify();
+      results[`port_${config.port}`] = { status: 'SUCCESS', secure: config.secure };
+    } catch (e) {
+      results[`port_${config.port}`] = { status: 'FAILED', error: e.message };
+    }
+  }
+  res.json({ results, host, user });
 });
 
 // Start Batch
